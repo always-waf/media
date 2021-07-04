@@ -1,0 +1,204 @@
+version: '3.7'
+
+services:
+  sabnzbd:
+    image: linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./sabnzbd/config:/config
+      - ./sabnzbd/downloads:/downloads
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: America/Los_Angeles
+    networks:
+      - cloudflared
+    restart: always
+
+  lidarr:
+    image: linuxserver/lidarr
+    container_name: lidarr
+    volumes:
+      - ./lidarr:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/music:/music
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    networks:
+      - cloudflared
+    restart: always
+
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: radarr
+    volumes:
+      - ./radarr/config:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/movies:/movies
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+    networks:
+      - cloudflared
+    restart: always
+
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: sonarr
+    volumes:
+      - ./sonarr/config:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/tv:/tv
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+    networks:
+      - cloudflared
+    restart: always
+
+  tautulli:
+    image: tautulli/tautulli:latest
+    container_name: tautulli
+    volumes:
+      - ./tautulli/config:/config
+      - ./plex/config:/plex_logs:ro
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+    networks:
+      - cloudflared
+    restart: always
+
+  transmission:
+    image: linuxserver/transmission:latest
+    container_name: transmission
+    ports:
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - ./transmission/config:/config
+      - ./transmission/downloads:/downloads
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+      - TRANSMISSION_WEB_HOME=/combustion-release
+    networks:
+      - cloudflared
+    restart: always  
+
+  plex:
+    image: plexinc/pms-docker:plexpass
+    container_name: plex
+    volumes:
+      - ./plex/config:/config
+      - ./plex/transcode:/transcode
+      - /data/media:/media
+    environment:
+      PGID: 1000
+      PUID: 1000
+      ADVERTISE_IP: "http://$MY_PUB_IP:32400"
+      PLEX_CLAIM: "$MY_CLAIM_TOKEN"
+      TZ: America/Los_Angeles
+      GIDLIST: 44
+      VERSION: docker
+    #  NVIDIA_VISIBLE_DEVICES: all
+    #  NVIDIA_DRIVER_CAPABILITIES: all
+    #runtime: nvidia
+    network_mode: host
+    restart: always
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+### docker network create cloudflared before running docker-compose up -d 
+
+networks:
+  cloudflared:
+    external: true
+
+## Sometimes I switch back and forth between Cloudflare Tunnel and Traefik
+## I keep the below examples so I don't forget how to label Traefik v2
+#
+#  ombi:
+#    image: linuxserver/ombi
+#    container_name: ombi
+#    volumes:
+#      - ./ombi/config:/config
+#    environment:
+#      - PGID=1000
+#      - PUID=1000
+#      - TZ=America/Los_Angeles
+#      - BASE_URL=/ombi
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.docker.network=traefik"
+#      - "traefik.http.routers.ombi.rule=Host(`ombi.$MY_DOMAIN.com`)"
+#      - "traefik.http.routers.ombi.service=ombi"
+#      - "traefik.http.routers.ombi.entrypoints=https"
+#      - "traefik.http.routers.ombi.tls=true"
+#      - "traefik.http.routers.ombi.tls.certresolver=dns-cloudflare"
+#      - "traefik.http.services.ombi.loadbalancer.server.port=3579"
+#    networks:
+#      - traefik
+#      - media
+#    restart: always
+#
+#
+#  nzbget:
+#    image: ghcr.io/linuxserver/nzbget
+#    container_name: nzbget
+#    volumes:
+#      - ./nzbget/config:/config
+#      - ./nzbget/downloads:/downloads
+#    environment:
+#      - PUID=1000
+#      - PGID=1000
+#      - TZ=America/Los_Angeles
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.docker.network=traefik"
+#      - "traefik.http.routers.nzbget.rule=Host(`download.$MY_DOMAIN.com`)"
+#      - "traefik.http.routers.nzbget.service=nzbget"
+#      - "traefik.http.routers.nzbget.entrypoints=https"
+#      - "traefik.http.routers.nzbget.tls=true"
+#      - "traefik.http.routers.nzbget.tls.certresolver=dns-cloudflare"
+#      - "traefik.http.services.nzbget.loadbalancer.server.port=6789"
+#    networks:
+#      - traefik
+#    restart: always
+#
+#
+#  sabnzbd:
+#    image: linuxserver/sabnzbd:latest
+#    container_name: sabnzbd
+#    volumes:
+#      - ./sabnzbd/config:/config
+#      - ./sabnzbd/downloads:/downloads
+#    environment:
+#      - PGID=1000
+#      - PUID=1000
+#      - TZ=America/Los_Angeles
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.docker.network=traefik"
+#      - "traefik.http.routers.sabnzbd.rule=Host(`download.$MY_DOMAIN.com`)"
+#      - "traefik.http.routers.sabnzbd.service=sabnzbd"
+#      - "traefik.http.routers.sabnzbd.entrypoints=https"
+#      - "traefik.http.routers.sabnzbd.tls=true"
+#      - "traefik.http.routers.sabnzbd.tls.certresolver=dns-cloudflare"
+#      - "traefik.http.services.sabnzbd.loadbalancer.server.port=8080"
+#    networks:
+#      - traefik
+#    restart: always

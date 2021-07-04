@@ -1,0 +1,152 @@
+version: '3'
+
+# I use NVME storage as a download directory and to hold my config files
+# I use a 10TB HDD for media content and my HDD is mounted at /data
+# For example mount /dev/sda1 /data
+
+services:
+
+  sabnzbd:
+    image: linuxserver/sabnzbd:latest
+    volumes:
+      - ./sabnzbd/config:/config
+      - ./sabnzbd/downloads:/downloads
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: America/Los_Angeles
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  transmission:
+    image: linuxserver/transmission:latest
+    volumes:
+      - ./transmission/config:/config
+      - ./transmission/downloads:/downloads
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+      - TRANSMISSION_WEB_HOME=/combustion-release
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  radarr:
+    image: linuxserver/radarr:latest
+    volumes:
+      - ./radarr/config:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/movies:/movies
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: America/Los_Angeles
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  sonarr:
+    image: linuxserver/sonarr:latest
+    volumes:
+      - ./sonarr/config:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/tv:/tv
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  lidarr:
+    image: linuxserver/lidarr
+    volumes:
+      - ./lidarr/config:/config
+      - ./sabnzbd/downloads:/downloads
+      - /data/media/music:/music
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  tautulli:
+    image: tautulli/tautulli:latest
+    volumes:
+      - ./tautulli/config:/config
+      - ./plex/config:/plex_logs:ro
+    environment:
+      - TZ=America/Los_Angeles
+      - PGID=1000
+      - PUID=1000
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  plex:
+    image: plexinc/pms-docker:plexpass
+    ports:
+      - "32400:32400"
+    volumes:
+      - ./plex/config:/config
+      - ./plex/transcode:/transcode
+      - /data/media:/media
+    environment:
+      ADVERTISE_IP: "http://$PUB_IP:32400"
+      PLEX_CLAIM: "$MY_CLAIM_TOKEN"
+      TZ: America/Los_Angeles
+      PGID: 1000
+      PUID: 1000
+      GIDLIST: 44
+      VERSION: docker
+      UMASK_SET: 022
+    networks:
+      - cloudflared
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+## For Kodi ##################################
+#  mariadb:
+#    image: mariadb:10.5.10-focal
+#    ports:
+#      - "3306:3306"
+#    volumes:
+#      - /docker/mariadb/app:/var/lib/mysql
+#    environment:
+#      MYSQL_ROOT_PASSWORD: kodi
+#    networks:
+#      - cloudflared
+#    deploy:
+#      replicas: 1
+#      restart_policy:
+#        condition: on-failure
+###############################################
+
+networks:
+  cloudflared:
+    external: true
